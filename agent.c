@@ -12,10 +12,12 @@
 #define PULL_INTERVAL 1e4 // us
 #define MAX_RECORD_NUM 1024
 
+static int interrupted = 0;
+
 void interrupt_handler(int signo)
 {
     printf("Cleanning up...\n");
-    nl_client_cleanup();
+    interrupted = 1;
 }
 
 typedef struct traffic_record_s {
@@ -32,20 +34,19 @@ void main_loop()
     traffic_record records[MAX_RECORD_NUM];
     int record_num;
 
-    while (1) {
+    while (!interrupted) {
         tr_hash = NULL;
         memset(records, 0, sizeof(records));
         record_num = 0;
         t = 0;
 
-        while (t < INTERVAL) {
+        while (t < INTERVAL && !interrupted) {
             usleep(PULL_INTERVAL);
             t += PULL_INTERVAL;
             ret = nl_client_pull(logs);
             if (ret < 0) {
                 printf("Failed to pull from kernel module. rc = %d\n", ret);
-                nl_client_cleanup();
-                exit(-1);
+                return;
             }
 
             //printf("ret: %d\n", ret);
@@ -68,6 +69,8 @@ void main_loop()
                 }
             }
         }
+
+        if (interrupted) break;
 
         traffic_record* tr_entry;
         for (tr_entry = tr_hash; tr_entry != NULL; tr_entry=tr_entry->hh.next) {
@@ -96,7 +99,7 @@ int main(int argc, char *argv[])
         printf("Usage: ./agent <interface>\n");
         goto exit;
     }
-    
+
     rc = nl_client_init(argv[1]);
     if (rc) {
         fprintf(stderr, "nl_client_init failed: %i\n", rc);
@@ -110,6 +113,8 @@ int main(int argc, char *argv[])
     }
 
     main_loop();
+
+    nl_client_cleanup();
  exit:
     return 0;
 }
