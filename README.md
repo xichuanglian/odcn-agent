@@ -38,5 +38,5 @@ make
 
 Run:
 ```
-bin/agent <interface>
+bin/agent -a <server_ip:port> -i <interface> [-v[v]] [-h]
 ```
