@@ -78,18 +78,37 @@ unsigned int main_hook(const struct nf_hook_ops *ops,
                        int (*okfn)(struct sk_buff *))
 {
     struct iphdr *iph;
-    __u32 daddr;
-    __u16 pos;
+    struct tcphdr *tcph;
+    struct udphdr *udph;
+    __u32 daddr, plen;
+    __u16 pos, sport, dport;
+    pkt_proto proto;
     
     if (strcmp(out->name, ifce_name) == 0) {
         // Get IP header
         iph = (struct iphdr *) skb_header_pointer(skb, 0, sizeof(struct iphdr), temp_buffer);
+        daddr = ntohl(iph->daddr);
+        plen = ntohs(iph->tot_len) - (iph->ihl << 2);
 
         if (iph->protocol == 0x6 || iph->protocol == 0x11) {
-            daddr = ntohl(iph->daddr);
+            if (iph->protocol == 0x6) { // tcp
+                tcph = (struct tcphdr *) skb_header_pointer(skb, sizeof(struct iphdr), sizeof(struct tcphdr), temp_buffer);
+                sport = htons(tcph->source);
+                dport = htons(tcph->dest);
+                proto = PROTO_TCP;
+            } else { // udp
+                udph = (struct udphdr *) skb_header_pointer(skb, sizeof(struct iphdr), sizeof(struct udphdr), temp_buffer);
+                sport = htons(udph->source);
+                dport = htons(udph->dest);
+                proto = PROTO_UDP;
+            }
+ 
             pos = fetch_and_inc_tail();
+            pkt_log_queue[pos].sport = sport;
+            pkt_log_queue[pos].dport = dport;
             pkt_log_queue[pos].daddr = daddr;
-            pkt_log_queue[pos].len = ntohs(iph->tot_len) - (iph->ihl << 2);
+            pkt_log_queue[pos].len   = plen;
+            pkt_log_queue[pos].proto = proto;
         }
         return NF_ACCEPT;
     } else {
@@ -264,7 +283,6 @@ int agent_c_pull(struct sk_buff *skb, struct genl_info *info)
         goto failure;
     }
 
-    //printk(KERN_INFO "head tail: %d %d\n", head, tail);
     spin_lock(&tail_lock);
     cnt = tail - head;
     pos = head;

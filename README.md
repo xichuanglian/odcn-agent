@@ -16,7 +16,7 @@ sudo apt-get install libnl-3-dev libnl-genl-3-dev
 
 ### Compile & Install Kernel Module
 
-* Compile - Execute the following commands in the project directory
+Compile - Execute the following commands in the project directory
 ```
 cd module
 make
@@ -30,7 +30,7 @@ sudo rmmod agent_module
 
 ### Compile & Run Agent
 
-* Compile - Execute the following commands in the project directory
+Compile - Execute the following commands in the project directory
 ```
 mkdir bin
 make
