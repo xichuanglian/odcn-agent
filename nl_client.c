@@ -220,7 +220,7 @@ int __nl_client_reply_callback(struct nl_msg* msg, void* args)
 
     // record sequence number
     reply_seq = hdr->nlmsg_seq;
-    
+
     // parse attributes
     if (nla_parse(attrs, AGENT_A_MAX, head, len, agent_genl_policy) < 0) {
         fprintf(stderr, "Failed to parse attributes of reply message.\n");
@@ -237,7 +237,7 @@ int __nl_client_reply_callback(struct nl_msg* msg, void* args)
         len -= nla_total_size(nla_len(attrs[AGENT_A_MSG]));
     }
 
-    if (attrs[AGENT_A_CNT] && attrs[AGENT_A_PKT_LOG]) {
+    if (attrs[AGENT_A_CNT]) {
         memset(pkt_logs, 0, sizeof(pkt_logs));
         pkt_log_num = nla_get_u32(attrs[AGENT_A_CNT]);
         if (pkt_log_num > 0) {
@@ -249,9 +249,9 @@ int __nl_client_reply_callback(struct nl_msg* msg, void* args)
             }
         }
     }
-    
+
     return NL_OK;
-    
+
  failure:
     s_ret = -1;
     return NL_STOP;
