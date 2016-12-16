@@ -257,11 +257,11 @@ int agent_c_unhook(struct sk_buff *skb, struct genl_info *info)
 
 int agent_c_pull(struct sk_buff *skb, struct genl_info *info)
 {
-    int rc, cnt;
+    int rc;
     __u32 seq;
     struct sk_buff *reply_skb;
     void* msg_head;
-    __u16 pos;
+    __u16 pos, cnt;
 
     seq = info->snd_seq;
 
