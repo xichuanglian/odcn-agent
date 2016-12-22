@@ -64,10 +64,10 @@ struct genl_ops agent_genl_ops[AGENT_C_MAX] = {
 __u16 fetch_and_inc_tail(void)
 {
     __u16 ret;
-    spin_lock_irq(&tail_lock);
+    //spin_lock_irq(&tail_lock);
     ret = tail;
     tail += 1;
-    spin_unlock_irq(&tail_lock);
+    //spin_unlock_irq(&tail_lock);
     return ret;
 }
 
@@ -292,11 +292,11 @@ int agent_c_pull(struct sk_buff *skb, struct genl_info *info)
         goto failure;
     }
 
-    spin_lock_irq(&tail_lock);
+    //spin_lock_irq(&tail_lock);
     cnt = tail - head;
     pos = head;
     head = tail;
-    spin_unlock_irq(&tail_lock);
+    //spin_unlock_irq(&tail_lock);
 
     send_cnt = 0;
     if (cnt > cnt_max) {
