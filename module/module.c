@@ -64,10 +64,10 @@ struct genl_ops agent_genl_ops[AGENT_C_MAX] = {
 __u16 fetch_and_inc_tail(void)
 {
     __u16 ret;
-    spin_lock(&tail_lock);
+    spin_lock_irq(&tail_lock);
     ret = tail;
     tail += 1;
-    spin_unlock(&tail_lock);
+    spin_unlock_irq(&tail_lock);
     return ret;
 }
 
@@ -232,6 +232,7 @@ int send_reply_msg(struct genl_info* info, __u8 cmd, __u8 ret, char* msg, int fl
     return -1;
 }
 
+static __u16 cnt_max;
 int agent_c_hook(struct sk_buff *skb, struct genl_info *info)
 {
     int rc;
@@ -244,7 +245,7 @@ int agent_c_hook(struct sk_buff *skb, struct genl_info *info)
     } else {
         send_reply_msg(info, AGENT_C_HOOK, 0, "Netfilter hooked", 0);
     }
-        
+    cnt_max = 0;
     return rc;
 }
 
@@ -255,13 +256,21 @@ int agent_c_unhook(struct sk_buff *skb, struct genl_info *info)
     return 0;
 }
 
+#define MAX_SEND_NUM 128
+static pkt_log send_buffer[MAX_SEND_NUM];
+
+int same_flow(pkt_log* a, pkt_log* b) {
+    return (a->sport == b->sport) && (a->dport == b->dport) &&
+           (a->daddr == b->daddr) && (a->proto == b->proto);
+}
+
 int agent_c_pull(struct sk_buff *skb, struct genl_info *info)
 {
-    int rc;
+    int rc, i;
     __u32 seq;
     struct sk_buff *reply_skb;
     void* msg_head;
-    __u16 pos, cnt;
+    __u16 pos, cnt, send_cnt;
 
     seq = info->snd_seq;
 
@@ -283,18 +292,42 @@ int agent_c_pull(struct sk_buff *skb, struct genl_info *info)
         goto failure;
     }
 
-    spin_lock(&tail_lock);
+    spin_lock_irq(&tail_lock);
     cnt = tail - head;
     pos = head;
     head = tail;
-    spin_unlock(&tail_lock);
+    spin_unlock_irq(&tail_lock);
 
-    rc = nla_put_u32(reply_skb, AGENT_A_CNT, cnt);
+    send_cnt = 0;
+    if (cnt > cnt_max) {
+        cnt_max = cnt;
+        printk(KERN_INFO "cnt_max: %d\n", cnt_max);
+    }
+    while (cnt-- > 0) {
+        if (send_cnt == 0 || !same_flow(&pkt_log_queue[pos], &send_buffer[send_cnt - 1])) {
+            if (send_cnt < MAX_SEND_NUM) {
+                send_buffer[send_cnt].sport = pkt_log_queue[pos].sport;
+                send_buffer[send_cnt].dport = pkt_log_queue[pos].dport;
+                send_buffer[send_cnt].daddr = pkt_log_queue[pos].daddr;
+                send_buffer[send_cnt].len   = pkt_log_queue[pos].len;
+                send_buffer[send_cnt].proto = pkt_log_queue[pos].proto;
+                send_cnt += 1;
+            } else {
+                head = pos;
+                printk(KERN_WARNING "log send buffer overflowed, %d logs delayed\n", cnt);
+                break;
+            }
+        } else {
+            send_buffer[send_cnt - 1].len += pkt_log_queue[pos].len;
+        }
+        pos += 1;
+    }
+    rc = nla_put_u32(reply_skb, AGENT_A_CNT, send_cnt);
     if (rc != 0) {
         goto failure;
     }
-    while (cnt-- > 0) {
-        nla_put(reply_skb, AGENT_A_PKT_LOG, PKT_LOG_SIZE, &(pkt_log_queue[pos++]));
+    for (i = 0; i < send_cnt; ++i) {
+        nla_put(reply_skb, AGENT_A_PKT_LOG, PKT_LOG_SIZE, &(send_buffer[i]));
     }
 
     genlmsg_end(reply_skb, msg_head);

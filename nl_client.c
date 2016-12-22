@@ -142,13 +142,13 @@ int __nl_client_unhook_netfilter()
 int __nl_client_wait_for_reply(unsigned int seq, unsigned int* p)
 {
     int rc;
-    while ((*p) != seq) {
+    //while ((*p) < seq) {
         rc = nl_recvmsgs_default(sk);
         if (rc != 0) {
             fprintf(stderr, "nl_recvmsgs_default error: %d\n", rc);
             return rc;
         }
-    }
+    //}
     return 0;
 }
 
@@ -198,7 +198,11 @@ int __nl_client_ack_callback(struct nl_msg* msg, void* args)
     
     // record sequence number
     hdr = nlmsg_hdr(msg);
-    ack_seq = hdr->nlmsg_seq;
+    if (hdr->nlmsg_seq > ack_seq) {
+        ack_seq = hdr->nlmsg_seq;
+    } else {
+        return NL_SKIP;
+    }
     
     // printf("ACK received: %d\n", ack_seq);
     return NL_STOP;
@@ -219,7 +223,11 @@ int __nl_client_reply_callback(struct nl_msg* msg, void* args)
     len  = genlmsg_attrlen(gnlh, 0);
 
     // record sequence number
-    reply_seq = hdr->nlmsg_seq;
+    if (hdr->nlmsg_seq > reply_seq) {
+        reply_seq = hdr->nlmsg_seq;
+    } else {
+        return NL_SKIP;
+    }
 
     // parse attributes
     if (nla_parse(attrs, AGENT_A_MAX, head, len, agent_genl_policy) < 0) {
